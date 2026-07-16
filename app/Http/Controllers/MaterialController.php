@@ -8,14 +8,11 @@ use Illuminate\Http\Request;
 
 class MaterialController extends Controller
 {
-    // GET /materiales
-    public function index(Request $request)
+    // GET /circulos/{circulo}/materiales
+    public function index(Request $request, Circulo $circulo)
     {
-        $query = MaterialCompartido::with(['usuario', 'circulo']);
-
-        if ($request->filled('circulo_id')) {
-            $query->where('circulo_id', $request->circulo_id);
-        }
+        $query = MaterialCompartido::with(['usuario', 'circulo'])
+            ->where('circulo_id', $circulo->id);
 
         if ($request->filled('usuario_id')) {
             $query->where('usuario_id', $request->usuario_id);
@@ -31,21 +28,22 @@ class MaterialController extends Controller
 
         return response()->json(
             $query->orderByDesc('created_at')
-                ->paginate($request->get('per_page', 20))
+                  ->paginate($request->get('per_page', 20))
         );
     }
 
-    // POST /materiales
+    // POST /circulos/{circulo}/materiales
     public function store(Request $request, Circulo $circulo)
     {
         $data = $request->validate([
             'nombre_archivo' => 'required|string|max:255',
-            'url_archivo' => 'string|max:500',
+            'url_archivo' => 'required|string|max:500',
             'tipo_archivo' => 'required|string|max:50',
             'tamano_bytes' => 'required|integer|min:0',
         ]);
 
-        $data['usuario_id'] = auth()->id;
+        $data['circulo_id'] = $circulo->id;
+        $data['usuario_id'] = $request->user()->id;
 
         $material = MaterialCompartido::create($data);
 
@@ -55,10 +53,10 @@ class MaterialController extends Controller
         ], 201);
     }
 
-    // DELETE /materiales/{id}
-    public function destroy(MaterialCompartido $material)
+    // DELETE /materiales/{material}
+    public function destroy(Request $request, MaterialCompartido $material)
     {
-        if ($material->usuario_id != auth()->id) {
+        if ($material->usuario_id != $request->user()->id) {
             return response()->json([
                 'message' => 'No tienes permiso para eliminar este material.'
             ], 403);
