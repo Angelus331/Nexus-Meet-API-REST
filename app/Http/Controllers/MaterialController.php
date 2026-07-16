@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MaterialCompartido;
+use App\Models\Circulo;
 use Illuminate\Http\Request;
 
 class MaterialController extends Controller
@@ -30,17 +31,16 @@ class MaterialController extends Controller
 
         return response()->json(
             $query->orderByDesc('created_at')
-                  ->paginate($request->get('per_page', 20))
+                ->paginate($request->get('per_page', 20))
         );
     }
 
     // POST /materiales
-    public function store(Request $request)
+    public function store(Request $request, Circulo $circulo)
     {
         $data = $request->validate([
-            'circulo_id' => 'required|exists:circulo,id',
             'nombre_archivo' => 'required|string|max:255',
-            'url_archivo' => 'required|string|max:500',
+            'url_archivo' => 'string|max:500',
             'tipo_archivo' => 'required|string|max:50',
             'tamano_bytes' => 'required|integer|min:0',
         ]);

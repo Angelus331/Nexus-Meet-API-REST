@@ -10,6 +10,10 @@ use Illuminate\Support\Str;
 use Kreait\Firebase\Contract\Auth as FirebaseAuth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
+use App\Mail\PasswordResetMail;
+use App\Models\PasswordReset;
+use Illuminate\Support\Facades\Mail;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
@@ -198,4 +202,84 @@ class AuthController extends Controller
             $partes[1] ?? '',
         ];
     }
+ 
+   public function forgotPassword(Request $request): JsonResponse
+   {
+    $data = $request->validate([
+        'correo' => 'required|email',
+    ]);
+
+    $usuario = Usuario::where('correo', $data['correo'])->first();
+
+    // Por seguridad no revelamos si el correo existe o no
+    if (!$usuario) {
+        return response()->json([
+            'message' => 'Si el correo existe, se enviará un código de recuperación.'
+        ]);
+    }
+
+    // Eliminar códigos anteriores
+    PasswordReset::where('correo', $usuario->correo)->delete();
+
+    // Generar código de 6 dígitos
+    $codigo = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+    PasswordReset::create([
+        'correo' => $usuario->correo,
+        'codigo' => $codigo,
+        'expira_en' => Carbon::now()->addMinutes(15),
+    ]);
+
+    Mail::to($usuario->correo)->send(new PasswordResetMail($codigo));
+
+    return response()->json([
+        'message' => 'Si el correo existe, se enviará un código de recuperación.'
+    ]);
+   }
+   
+   public function resetPassword(Request $request): JsonResponse
+   {
+    $data = $request->validate([
+        'correo' => 'required|email',
+        'codigo' => 'required|string|size:6',
+        'password' => 'required|string|min:8|confirmed',
+    ]);
+
+    $registro = PasswordReset::where('correo', $data['correo'])
+        ->where('codigo', $data['codigo'])
+        ->first();
+
+    if (!$registro) {
+        return response()->json([
+            'message' => 'Código incorrecto.'
+        ], 400);
+    }
+
+    if (Carbon::now()->greaterThan($registro->expira_en)) {
+
+        $registro->delete();
+
+        return response()->json([
+            'message' => 'El código ha expirado.'
+        ], 400);
+    }
+
+    $usuario = Usuario::where('correo', $data['correo'])->first();
+
+    if (!$usuario) {
+        return response()->json([
+            'message' => 'Usuario no encontrado.'
+        ], 404);
+    }
+
+    $usuario->password_hash = Hash::make($data['password']);
+    $usuario->save();
+
+    // Eliminar el código para que no pueda reutilizarse
+    $registro->delete();
+
+    return response()->json([
+        'message' => 'Contraseña actualizada correctamente.'
+    ]);
+   }
 }

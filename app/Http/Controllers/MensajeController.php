@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MensajeChat;
+use App\Models\Circulo;
 use Illuminate\Http\Request;
 
 
@@ -32,19 +33,18 @@ class MensajeController extends Controller
     }
 
     // POST /mensajes
-    public function store(Request $request)
+        public function store(Request $request, Circulo $circulo)
     {
         $data = $request->validate([
-            'circulo_id' => 'required|exists:circulo,id',
             'contenido' => 'required|string',
             'tipo' => 'required|in:texto,imagen,archivo',
         ]);
 
         $mensaje = MensajeChat::create([
-            'circulo_id' => $data['circulo_id'],
-            'usuario_id' => auth()->id,
+            'circulo_id' => $circulo->id,
+            'usuario_id' => $request->user()->id,
             'contenido' => $data['contenido'],
-            'tipo' => $data['tipo'],
+            'tipo' => $data['tipo'] ?? 'texto',
             'editado' => false,
         ]);
 
