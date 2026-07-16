@@ -1,0 +1,73 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\MaterialCompartido;
+use Illuminate\Http\Request;
+
+class MaterialController extends Controller
+{
+    // GET /materiales
+    public function index(Request $request)
+    {
+        $query = MaterialCompartido::with(['usuario', 'circulo']);
+
+        if ($request->filled('circulo_id')) {
+            $query->where('circulo_id', $request->circulo_id);
+        }
+
+        if ($request->filled('usuario_id')) {
+            $query->where('usuario_id', $request->usuario_id);
+        }
+
+        if ($request->filled('tipo_archivo')) {
+            $query->where('tipo_archivo', $request->tipo_archivo);
+        }
+
+        if ($request->filled('q')) {
+            $query->where('nombre_archivo', 'like', "%{$request->q}%");
+        }
+
+        return response()->json(
+            $query->orderByDesc('created_at')
+                  ->paginate($request->get('per_page', 20))
+        );
+    }
+
+    // POST /materiales
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'circulo_id' => 'required|exists:circulo,id',
+            'nombre_archivo' => 'required|string|max:255',
+            'url_archivo' => 'required|string|max:500',
+            'tipo_archivo' => 'required|string|max:50',
+            'tamano_bytes' => 'required|integer|min:0',
+        ]);
+
+        $data['usuario_id'] = auth()->id;
+
+        $material = MaterialCompartido::create($data);
+
+        return response()->json([
+            'message' => 'Material compartido correctamente.',
+            'data' => $material
+        ], 201);
+    }
+
+    // DELETE /materiales/{id}
+    public function destroy(MaterialCompartido $material)
+    {
+        if ($material->usuario_id != auth()->id) {
+            return response()->json([
+                'message' => 'No tienes permiso para eliminar este material.'
+            ], 403);
+        }
+
+        $material->delete();
+
+        return response()->json([
+            'message' => 'Material eliminado correctamente.'
+        ]);
+    }
+}
