@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MensajeChat;
-use App\Models\Circulo;
+use App\Models\Circulo; //agregue cirulo model
 use Illuminate\Http\Request;
 
 
@@ -42,7 +42,7 @@ class MensajeController extends Controller
 
         $mensaje = MensajeChat::create([
             'circulo_id' => $circulo->id,
-            'usuario_id' => $request->user()->id,
+            'usuario_id' => $request->user()->id,//modfique que no encontrba id
             'contenido' => $data['contenido'],
             'tipo' => $data['tipo'] ?? 'texto',
             'editado' => false,

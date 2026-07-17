@@ -36,6 +36,7 @@ class MaterialController extends Controller
     public function store(Request $request, Circulo $circulo)
     {
         $data = $request->validate([
+            //quite el circulo_id
             'nombre_archivo' => 'required|string|max:255',
             'url_archivo' => 'required|string|max:500',
             'tipo_archivo' => 'required|string|max:50',

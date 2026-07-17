@@ -45,6 +45,7 @@ class EventoController extends Controller
             'ubicacion' => 'nullable|string|max:255',
             'responsable_id' => 'nullable|exists:usuario,id',
             'estado' => 'required|string|max:50',
+            //revise las tablas
         ]);
 
         $evento = Evento::create($data);

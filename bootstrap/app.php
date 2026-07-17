@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
-        api: __DIR__.'/../routes/api.php',
+        api: __DIR__.'/../routes/api.php', //agregado
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         return response()->json([
             'message' => 'No autenticado'
         ], 401);
+        //agergue esto para saber cuandos e cierra sesion
     });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
