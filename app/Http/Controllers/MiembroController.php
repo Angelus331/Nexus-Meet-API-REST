@@ -2,81 +2,71 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MiembroCirculo;
+use App\Http\Requests\Miembro\ActualizarMiembroRequest;
+use App\Http\Requests\Miembro\AgregarMiembroRequest;
+use App\Models\Circulo;
+use App\Models\Usuario;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class MiembroController extends Controller
 {
-     // GET /miembros
-    public function index(Request $request)
+    /**
+     * GET /circulos/{circulo}/miembros
+     */
+    public function index(Circulo $circulo): JsonResponse
     {
-        $query = MiembroCirculo::with(['usuario', 'circulo']);
+        return response()->json(['data' => $circulo->miembros]);
+    }
 
-        if ($request->filled('circulo_id')) {
-            $query->where('circulo_id', $request->circulo_id);
-        }
+    /**
+     * POST /circulos/{circulo}/miembros
+     */
+    public function store(AgregarMiembroRequest $request, Circulo $circulo): JsonResponse
+    {
+        $data = $request->validated();
 
-        if ($request->filled('usuario_id')) {
-            $query->where('usuario_id', $request->usuario_id);
-        }
-
-        if ($request->filled('rol')) {
-            $query->where('rol', $request->rol);
-        }
-
-        if ($request->filled('estado')) {
-            $query->where('estado', $request->estado);
-        }
-
-        return response()->json(
-            $query->paginate($request->get('per_page', 20))
+        abort_if(
+            $circulo->miembros()->count() >= $circulo->max_miembros,
+            409,
+            'Este círculo ya alcanzó su límite de miembros'
         );
+
+        $circulo->miembros()->syncWithoutDetaching([
+            $data['usuario_id'] => [
+                'rol' => $data['rol'] ?? 'miembro',
+                'estado' => 'activo',
+            ],
+        ]);
+
+        return response()->json(['data' => $circulo->miembros], 201);
     }
 
-    // POST /miembros
-    public function store(Request $request)
+    /**
+     * PUT /circulos/{circulo}/miembros/{usuario}
+     */
+    public function update(ActualizarMiembroRequest $request, Circulo $circulo, Usuario $usuario): JsonResponse
     {
-        $data = $request->validate([
-            'circulo_id' => 'required|exists:circulo,id',
-            'usuario_id' => 'required|exists:usuario,id',
-            'rol' => 'required|in:admin,miembro',
-            'estado' => 'required|in:activo,inactivo',
-        ]);
+        $circulo->miembros()->updateExistingPivot($usuario->id, $request->validated());
 
-        $data['fecha_union'] = now();
-
-        $miembro = MiembroCirculo::create($data);
-
-        return response()->json([
-            'message' => 'Miembro agregado correctamente',
-            'data' => $miembro
-        ], 201);
+        return response()->json(['data' => $circulo->miembros]);
     }
 
-    // PUT /miembros/{id}
-    public function update(Request $request, MiembroCirculo $miembro)
+    /**
+     * DELETE /circulos/{circulo}/miembros/{usuario}
+     */
+    public function destroy(Request $request, Circulo $circulo, Usuario $usuario): JsonResponse
     {
-        $data = $request->validate([
-            'rol' => 'sometimes|in:admin,miembro',
-            'estado' => 'sometimes|in:activo,inactivo',
-        ]);
+        $esAdmin = $circulo->miembros()
+            ->where('usuario_id', $request->user()->id)
+            ->wherePivot('rol', 'admin')
+            ->exists();
+        $esPropio = $usuario->id === $request->user()->id;
 
-        $miembro->update($data);
+        abort_unless($esAdmin || $esPropio, 403, 'No tienes permiso para expulsar a este miembro');
 
-        return response()->json([
-            'message' => 'Miembro actualizado',
-            'data' => $miembro
-        ]);
-    }
+        $circulo->miembros()->detach($usuario->id);
 
-    // DELETE /miembros/{id}
-    public function destroy(MiembroCirculo $miembro)
-    {
-        $miembro->delete();
-
-        return response()->json([
-            'message' => 'Miembro eliminado del círculo'
-        ]);
+        return response()->json(['message' => 'Miembro removido del círculo']);
     }
 }
-
