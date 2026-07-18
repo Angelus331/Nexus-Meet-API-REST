@@ -27,6 +27,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/refresh', [AuthController::class, 'refresh']);
+	
+	// Autorización de canales WebSocket (Reverb) — usa JWT en vez del
+    // /broadcasting/auth de sesión que Laravel registra por defecto
+    Route::post('/broadcasting/auth', function (Request $request) {
+        return Broadcast::auth($request);
+    });
 
     // Usuarios
     Route::get('/usuarios', [UsuarioController::class, 'index']);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Mensaje\ActualizarMensajeRequest;
 use App\Http\Requests\Mensaje\CrearMensajeRequest;
 use App\Http\Requests\Mensaje\ReportarMensajeRequest;
+use App\Events\MensajeEnviado;
 use App\Models\Circulo;
 use App\Models\MensajeChat;
 use App\Models\ReporteMensaje;
@@ -38,7 +39,7 @@ class MensajeController extends Controller
             'tipo' => $request->validated('tipo') ?? 'texto',
         ]);
 
-        // Aquí se dispararía el evento de broadcasting: event(new MensajeEnviado($mensaje));
+        event(new MensajeEnviado($mensaje->load('usuario')));
 
         return response()->json(['data' => $mensaje->load('usuario')], 201);
     }
