@@ -36,6 +36,7 @@ Route::middleware('auth:api')->group(function () {
 
     // Usuarios
     Route::get('/usuarios', [UsuarioController::class, 'index']);
+	Route::put('/usuarios/fcm-token', [UsuarioController::class, 'guardarFcmToken']);
     Route::get('/usuarios/{usuario}', [UsuarioController::class, 'show']);
     Route::put('/usuarios/{usuario}', [UsuarioController::class, 'update']);
     Route::post('/usuarios/{usuario}/foto', [UsuarioController::class, 'subirFoto']);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Usuario\ActualizarUsuarioRequest;
+use App\Http\Requests\Usuario\GuardarFcmTokenRequest;
 use App\Http\Requests\Usuario\SubirFotoRequest;
 use App\Models\Usuario;
 use Illuminate\Http\Request;
@@ -60,6 +61,20 @@ class UsuarioController extends Controller
         ]);
 
         return response()->json(['data' => $usuario]);
+    }
+
+    /**
+     * PUT /usuarios/fcm-token
+     * Flutter llama esto después del login para registrar el dispositivo
+     * y poder recibir notificaciones push.
+     */
+    public function guardarFcmToken(GuardarFcmTokenRequest $request): JsonResponse
+    {
+        $request->user()->update([
+            'fcm_token' => $request->validated('fcm_token'),
+        ]);
+
+        return response()->json(['message' => 'Token guardado']);
     }
 
     /**

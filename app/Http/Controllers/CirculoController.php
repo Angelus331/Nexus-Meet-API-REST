@@ -6,6 +6,7 @@ use App\Http\Requests\Circulo\ActualizarCirculoRequest;
 use App\Http\Requests\Circulo\CrearCirculoRequest;
 use App\Http\Requests\Circulo\UnirseCirculoRequest;
 use App\Models\Circulo;
+use App\Services\NotificacionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
@@ -85,7 +86,7 @@ class CirculoController extends Controller
     /**
      * POST /circulos/join
      */
-    public function join(UnirseCirculoRequest $request): JsonResponse
+    public function join(UnirseCirculoRequest $request, NotificacionService $notificaciones): JsonResponse
     {
         $circulo = Circulo::where('codigo_invitacion', $request->validated('codigo_invitacion'))->firstOrFail();
 
@@ -98,6 +99,14 @@ class CirculoController extends Controller
         $circulo->miembros()->syncWithoutDetaching([
             $request->user()->id => ['rol' => 'miembro', 'estado' => 'activo'],
         ]);
+
+        $notificaciones->enviar(
+            usuario: $request->user(),
+            tipo: 'miembro_nuevo',
+            titulo: 'Te uniste a un círculo',
+            contenido: "Ahora eres miembro de {$circulo->nombre}",
+            circulo: $circulo,
+        );
 
         return response()->json(['data' => $circulo->load('miembros')]);
     }

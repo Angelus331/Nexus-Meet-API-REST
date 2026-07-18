@@ -6,6 +6,7 @@ use App\Http\Requests\Evento\ActualizarEventoRequest;
 use App\Http\Requests\Evento\CrearEventoRequest;
 use App\Models\Circulo;
 use App\Models\Evento;
+use App\Services\NotificacionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -24,9 +25,19 @@ class EventoController extends Controller
     /**
      * POST /circulos/{circulo}/eventos
      */
-    public function store(CrearEventoRequest $request, Circulo $circulo): JsonResponse
+    public function store(CrearEventoRequest $request, Circulo $circulo, NotificacionService $notificaciones): JsonResponse
     {
         $evento = $circulo->eventos()->create($request->validated());
+
+        if ($evento->responsable_id) {
+            $notificaciones->enviar(
+                usuario: $evento->responsable,
+                tipo: 'turno_asignado',
+                titulo: 'Te asignaron un turno',
+                contenido: "Turno de {$circulo->nombre}: {$evento->titulo}",
+                circulo: $circulo,
+            );
+        }
 
         return response()->json(['data' => $evento], 201);
     }

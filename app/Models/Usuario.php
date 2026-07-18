@@ -23,6 +23,8 @@ class Usuario extends Authenticatable implements JWTSubject
         'telefono',
         'email_verificado_en',
         'activo',
+        'es_admin_plataforma',
+        'fcm_token',
     ];
 
     protected $hidden = [
@@ -32,6 +34,7 @@ class Usuario extends Authenticatable implements JWTSubject
     protected $casts = [
         'email_verificado_en' => 'datetime',
         'activo' => 'boolean',
+        'es_admin_plataforma' => 'boolean',
     ];
 
     // Laravel busca por defecto la columna "password"; aquí usamos "password_hash"

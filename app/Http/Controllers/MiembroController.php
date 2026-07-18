@@ -6,6 +6,7 @@ use App\Http\Requests\Miembro\ActualizarMiembroRequest;
 use App\Http\Requests\Miembro\AgregarMiembroRequest;
 use App\Models\Circulo;
 use App\Models\Usuario;
+use App\Services\NotificacionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -22,7 +23,7 @@ class MiembroController extends Controller
     /**
      * POST /circulos/{circulo}/miembros
      */
-    public function store(AgregarMiembroRequest $request, Circulo $circulo): JsonResponse
+    public function store(AgregarMiembroRequest $request, Circulo $circulo, NotificacionService $notificaciones): JsonResponse
     {
         $data = $request->validated();
 
@@ -38,6 +39,14 @@ class MiembroController extends Controller
                 'estado' => 'activo',
             ],
         ]);
+
+        $notificaciones->enviar(
+            usuario: Usuario::findOrFail($data['usuario_id']),
+            tipo: 'miembro_nuevo',
+            titulo: 'Te agregaron a un círculo',
+            contenido: "Ahora eres miembro de {$circulo->nombre}",
+            circulo: $circulo,
+        );
 
         return response()->json(['data' => $circulo->miembros], 201);
     }
