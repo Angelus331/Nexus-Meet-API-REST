@@ -1,113 +1,79 @@
 <?php
 
-namespace App\Models;
+namespace App\Http\Controllers;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Tymon\JWTAuth\Contracts\JWTSubject;
+use App\Http\Requests\Usuario\ActualizarUsuarioRequest;
+use App\Http\Requests\Usuario\SubirFotoRequest;
+use App\Models\Usuario;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
 
-class Usuario extends Authenticatable implements JWTSubject
+class UsuarioController extends Controller
 {
-    protected $table = 'usuario';
-
-    protected $fillable = [
-        'nombre',
-        'apellido',
-        'correo',
-        'password_hash',
-        'google_id',
-        'foto_perfil_url',
-        'facultad',
-        'carrera',
-        'telefono',
-        'email_verificado_en',
-        'activo',
-        'es_admin_plataforma',
-    ];
-
-    protected $hidden = [
-        'password_hash',
-    ];
-
-    protected $casts = [
-        'email_verificado_en' => 'datetime',
-        'activo' => 'boolean',
-        'es_admin_plataforma' => 'boolean',
-    ];
-
-    // Laravel busca por defecto la columna "password"; aquí usamos "password_hash"
-    public function getAuthPassword()
+    /**
+     * GET /usuarios (solo admin de plataforma)
+     */
+    public function index(Request $request): JsonResponse
     {
-        return $this->password_hash;
+        abort_unless($request->user()->es_admin_plataforma ?? false, 403, 'Solo un administrador puede listar usuarios');
+
+        $query = Usuario::query();
+
+        if ($request->filled('q')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('nombre', 'ilike', "%{$request->q}%")
+                  ->orWhere('correo', 'ilike', "%{$request->q}%");
+            });
+        }
+
+        return response()->json($query->paginate($request->get('per_page', 20)));
     }
 
-    // ---------- JWTSubject ----------
-    public function getJWTIdentifier()
+    /**
+     * GET /usuarios/{usuario}
+     */
+    public function show(Usuario $usuario): JsonResponse
     {
-        return $this->getKey();
+        return response()->json(['data' => $usuario]);
     }
 
-    public function getJWTCustomClaims()
+    /**
+     * PUT /usuarios/{usuario}
+     */
+    public function update(ActualizarUsuarioRequest $request, Usuario $usuario): JsonResponse
     {
-        return [];
+        $usuario->update($request->validated());
+
+        return response()->json(['data' => $usuario]);
     }
 
-    // ---------- Relaciones ----------
-
-    /** Círculos a los que pertenece (vía tabla pivote miembro_circulo) */
-    public function circulos(): BelongsToMany
+    /**
+     * POST /usuarios/{usuario}/foto
+     */
+    public function subirFoto(SubirFotoRequest $request, Usuario $usuario): JsonResponse
     {
-        return $this->belongsToMany(Circulo::class, 'miembro_circulo', 'usuario_id', 'circulo_id')
-            ->withPivot('rol', 'estado', 'fecha_union')
-            ->using(MiembroCirculo::class);
+        $ruta = $request->file('foto')->store('perfiles', 'public');
+
+        $usuario->update([
+            'foto_perfil_url' => Storage::disk('public')->url($ruta),
+        ]);
+
+        return response()->json(['data' => $usuario]);
     }
 
-    /** Círculos que este usuario creó */
-    public function circulosCreados(): HasMany
+    /**
+     * DELETE /usuarios/{usuario} (desactivar cuenta)
+     */
+    public function destroy(Request $request, Usuario $usuario): JsonResponse
     {
-        return $this->hasMany(Circulo::class, 'creador_id');
-    }
+        $esPropio = $usuario->id === $request->user()->id;
+        $esAdmin = $request->user()->es_admin_plataforma ?? false;
 
-    /** Mensajes de chat que envió */
-    public function mensajes(): HasMany
-    {
-        return $this->hasMany(MensajeChat::class, 'usuario_id');
-    }
+        abort_unless($esPropio || $esAdmin, 403, 'No tienes permiso para desactivar esta cuenta');
 
-    /** Eventos donde es responsable (turnos de comida) */
-    public function eventosResponsable(): HasMany
-    {
-        return $this->hasMany(Evento::class, 'responsable_id');
-    }
+        $usuario->update(['activo' => false]);
 
-    /** Materiales que subió */
-    public function materiales(): HasMany
-    {
-        return $this->hasMany(MaterialCompartido::class, 'usuario_id');
-    }
-
-    /** Gastos que pagó (registró) */
-    public function gastosPagados(): HasMany
-    {
-        return $this->hasMany(Gasto::class, 'usuario_pagador_id');
-    }
-
-    /** Su parte en cada gasto dividido */
-    public function gastoDetalles(): HasMany
-    {
-        return $this->hasMany(GastoDetalle::class, 'usuario_id');
-    }
-
-    /** Calificaciones que dejó en círculos */
-    public function calificaciones(): HasMany
-    {
-        return $this->hasMany(CalificacionCirculo::class, 'usuario_id');
-    }
-
-    /** Sus notificaciones */
-    public function notificaciones(): HasMany
-    {
-        return $this->hasMany(Notificacion::class, 'usuario_id');
+        return response()->json(['message' => 'Cuenta desactivada correctamente']);
     }
 }
