@@ -12,6 +12,8 @@ use App\Http\Controllers\MiembroController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\UsuarioController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Http\Request;
 
 // ---------- Autenticación (públicas) ----------
 Route::post('/auth/register', [AuthController::class, 'register']);

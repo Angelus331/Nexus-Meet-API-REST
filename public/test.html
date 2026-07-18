@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prueba Reverb - NexusMeet</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pusher/8.4.0/pusher.min.js"></script>
+  </head>
+  <body>
+    <h2>Prueba Reverb - Círculo 4</h2>
+
+    <p id="estado">Conectando...</p>
+
+    <hr />
+
+    <div id="mensajes"></div>
+
+    <script>
+      Pusher.logToConsole = true;
+
+		const pusher = new Pusher("zgpl4fhgdta3ngt53086", {
+		  cluster: "mt1",
+		  wsHost: "18.223.109.141",
+		  wsPort: 80,
+		  
+		  // ELIMINADO: wsPath: "/app", 
+		  
+		  forceTLS: false,
+		  enabledTransports: ["ws"],
+		  
+		  // CORREGIDO: En lugar de disableStats: true
+		  enableStats: false, 
+
+		  authEndpoint: "http://18.223.109.141/api/broadcasting/auth",
+
+		  auth: {
+			headers: {
+			  Authorization: "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOi8vMTguMjIzLjEwOS4xNDEvYXBpL2F1dGgvbG9naW4iLCJpYXQiOjE3ODQ0MDk0NTcsImV4cCI6MTc4NDQxMzA1NywibmJmIjoxNzg0NDA5NDU3LCJqdGkiOiJacVY4MWMzZXBLekVkTzJwIiwic3ViIjoiMyIsInBydiI6IjU4NzA4NjNkNGE2MmQ3OTE0NDNmYWY5MzZmYzM2ODAzMWQxMTBjNGYifQ.6GzsfTVv5suHyHOr7MsyrMxIGwUjXVHLSmBAe_hzE34", // Asegúrate de que este token siga siendo válido
+			},
+		  },
+		});
+
+      // Estado de la conexión
+      pusher.connection.bind("state_change", function (states) {
+        console.log("Estado:", states.previous, "->", states.current);
+      });
+
+      // Conectado
+      pusher.connection.bind("connected", function () {
+        console.log("WebSocket conectado");
+
+        document.getElementById("estado").innerHTML =
+          "<span style='color:green'>WebSocket conectado</span>";
+      });
+
+      // Error
+      pusher.connection.bind("error", function (err) {
+        console.error("Error WebSocket:", err);
+      });
+
+      // Suscribirse al canal privado
+      const canal = pusher.subscribe("private-circulo.5");
+
+      // Suscripción correcta
+      canal.bind("pusher:subscription_succeeded", function () {
+        console.log("Suscripción exitosa");
+
+        document.getElementById("estado").innerHTML =
+          "<span style='color:green'>Conectado al canal privado</span>";
+      });
+
+      // Error de autorización
+      canal.bind("pusher:subscription_error", function (error) {
+        console.error("Error de suscripción:", error);
+
+        document.getElementById("estado").innerHTML =
+          "<span style='color:red'>Error de suscripción</span>";
+      });
+
+      // Evento del chat
+      canal.bind("MensajeEnviado", function (data) {
+        console.log("Mensaje recibido:", data);
+
+        document.getElementById("mensajes").innerHTML += `
+        <p>
+            <strong>${data.usuario.nombre}</strong>:
+            ${data.contenido}
+        </p>
+    `;
+      });
+    </script>
+  </body>
+</html>
