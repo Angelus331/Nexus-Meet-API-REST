@@ -2,93 +2,67 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Evento\ActualizarEventoRequest;
+use App\Http\Requests\Evento\CrearEventoRequest;
+use App\Models\Circulo;
 use App\Models\Evento;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class EventoController extends Controller
 {
-    // GET /eventos
-    public function index(Request $request)
-    {
-        $query = Evento::with(['circulo', 'responsable']);
-
-        if ($request->filled('circulo_id')) {
-            $query->where('circulo_id', $request->circulo_id);
-        }
-
-        if ($request->filled('tipo')) {
-            $query->where('tipo', $request->tipo);
-        }
-
-        if ($request->filled('estado')) {
-            $query->where('estado', $request->estado);
-        }
-
-        if ($request->filled('q')) {
-            $query->where('titulo', 'like', "%{$request->q}%");
-        }
-
-        return response()->json(
-            $query->orderBy('fecha_hora')
-                  ->paginate($request->get('per_page', 20))
-        );
-    }
-    // POST /eventos
-    public function store(Request $request)
-    {
-        $data = $request->validate([
-            'circulo_id' => 'required|exists:circulo,id',
-            'tipo' => 'required|string|max:50',
-            'titulo' => 'required|string|max:150',
-            'descripcion' => 'nullable|string',
-            'fecha_hora' => 'required|date',
-            'ubicacion' => 'nullable|string|max:255',
-            'responsable_id' => 'nullable|exists:usuario,id',
-            'estado' => 'required|string|max:50',
-            //revise las tablas
-        ]);
-
-        $evento = Evento::create($data);
-
-        return response()->json([
-            'message' => 'Evento creado correctamente',
-            'data' => $evento
-        ], 201);
-    }
-    // GET /eventos/{id}
-    public function show(Evento $evento)
+    /**
+     * GET /circulos/{circulo}/eventos
+     */
+    public function index(Circulo $circulo): JsonResponse
     {
         return response()->json([
-            'data' => $evento->load('circulo', 'responsable', 'gastos')
+            'data' => $circulo->eventos()->orderBy('fecha_hora')->get(),
         ]);
     }
-    // PUT /eventos/{id}
-    public function update(Request $request, Evento $evento)
+
+    /**
+     * POST /circulos/{circulo}/eventos
+     */
+    public function store(CrearEventoRequest $request, Circulo $circulo): JsonResponse
     {
-        $data = $request->validate([
-            'tipo' => 'sometimes|string|max:50',
-            'titulo' => 'sometimes|string|max:150',
-            'descripcion' => 'nullable|string',
-            'fecha_hora' => 'sometimes|date',
-            'ubicacion' => 'nullable|string|max:255',
-            'responsable_id' => 'nullable|exists:usuario,id',
-            'estado' => 'sometimes|string|max:50',
-        ]);
+        $evento = $circulo->eventos()->create($request->validated());
 
-        $evento->update($data);
-
-        return response()->json([
-            'message' => 'Evento actualizado',
-            'data' => $evento
-        ]);
+        return response()->json(['data' => $evento], 201);
     }
-    // DELETE /eventos/{id}
-    public function destroy(Evento $evento)
-    {
-        $evento->delete();
 
-        return response()->json([
-            'message' => 'Evento eliminado correctamente'
-        ]);
+    /**
+     * GET /eventos/{evento}
+     */
+    public function show(Evento $evento): JsonResponse
+    {
+        return response()->json(['data' => $evento->load('circulo', 'responsable')]);
+    }
+
+    /**
+     * PUT /eventos/{evento}
+     */
+    public function update(ActualizarEventoRequest $request, Evento $evento): JsonResponse
+    {
+        $evento->update($request->validated());
+
+        return response()->json(['data' => $evento]);
+    }
+
+    /**
+     * DELETE /eventos/{evento}
+     */
+    public function destroy(Request $request, Evento $evento): JsonResponse
+    {
+        $esAdmin = $evento->circulo->miembros()
+            ->where('usuario_id', $request->user()->id)
+            ->wherePivot('rol', 'admin')
+            ->exists();
+
+        abort_unless($esAdmin, 403, 'Solo un admin del círculo puede cancelar este evento');
+
+        $evento->update(['estado' => 'cancelado']);
+
+        return response()->json(['message' => 'Evento cancelado']);
     }
 }

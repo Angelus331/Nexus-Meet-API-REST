@@ -2,108 +2,88 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Mensaje\ActualizarMensajeRequest;
+use App\Http\Requests\Mensaje\CrearMensajeRequest;
+use App\Http\Requests\Mensaje\ReportarMensajeRequest;
+use App\Models\Circulo;
 use App\Models\MensajeChat;
-use App\Models\Circulo; //agregue cirulo model
+use App\Models\ReporteMensaje;
 use Illuminate\Http\Request;
-
+use Illuminate\Http\JsonResponse;
 
 class MensajeController extends Controller
 {
-    // GET /mensajes
-    public function index(Request $request)
+    /**
+     * GET /circulos/{circulo}/mensajes?before=id
+     */
+    public function index(Request $request, Circulo $circulo): JsonResponse
     {
-        $query = MensajeChat::with(['usuario', 'circulo']);
+        $query = $circulo->mensajes()->with('usuario')->orderByDesc('created_at');
 
-        if ($request->filled('circulo_id')) {
-            $query->where('circulo_id', $request->circulo_id);
+        if ($request->filled('before')) {
+            $query->where('id', '<', $request->before);
         }
 
-        if ($request->filled('usuario_id')) {
-            $query->where('usuario_id', $request->usuario_id);
-        }
-
-        if ($request->filled('tipo')) {
-            $query->where('tipo', $request->tipo);
-        }
-
-        return response()->json(
-            $query->orderBy('created_at', 'asc')
-                ->paginate($request->get('per_page', 20))
-        );
+        return response()->json($query->limit($request->get('per_page', 30))->get());
     }
 
-    // POST /mensajes
-        public function store(Request $request, Circulo $circulo)
+    /**
+     * POST /circulos/{circulo}/mensajes
+     */
+    public function store(CrearMensajeRequest $request, Circulo $circulo): JsonResponse
     {
-        $data = $request->validate([
-            'contenido' => 'required|string',
-            'tipo' => 'required|in:texto,imagen,archivo',
+        $mensaje = $circulo->mensajes()->create([
+            'usuario_id' => $request->user()->id,
+            'contenido' => $request->validated('contenido'),
+            'tipo' => $request->validated('tipo') ?? 'texto',
         ]);
 
-        $mensaje = MensajeChat::create([
-            'circulo_id' => $circulo->id,
-            'usuario_id' => $request->user()->id,//modfique que no encontrba id
-            'contenido' => $data['contenido'],
-            'tipo' => $data['tipo'] ?? 'texto',
-            'editado' => false,
-        ]);
+        // Aquí se dispararía el evento de broadcasting: event(new MensajeEnviado($mensaje));
 
-        return response()->json([
-            'message' => 'Mensaje enviado correctamente',
-            'data' => $mensaje->load('usuario')
-        ], 201);
+        return response()->json(['data' => $mensaje->load('usuario')], 201);
     }
 
-
-    // PUT /mensajes/{id}
-    public function update(Request $request, MensajeChat $mensaje)
+    /**
+     * PUT /mensajes/{mensaje}
+     */
+    public function update(ActualizarMensajeRequest $request, MensajeChat $mensaje): JsonResponse
     {
-        if ($mensaje->usuario_id != auth()->id) {
-            return response()->json([
-                'message' => 'No puedes editar este mensaje.'
-            ], 403);
-        }
-
-        $data = $request->validate([
-            'contenido' => 'required|string'
-        ]);
-
         $mensaje->update([
-            'contenido' => $data['contenido'],
+            'contenido' => $request->validated('contenido'),
             'editado' => true,
         ]);
 
-        return response()->json([
-            'message' => 'Mensaje actualizado',
-            'data' => $mensaje
-        ]);
+        return response()->json(['data' => $mensaje]);
     }
 
-    // DELETE /mensajes/{id}
-    public function destroy(MensajeChat $mensaje)
+    /**
+     * DELETE /mensajes/{mensaje}
+     */
+    public function destroy(Request $request, MensajeChat $mensaje): JsonResponse
     {
-        if ($mensaje->usuario_id != auth()->id) {
-            return response()->json([
-                'message' => 'No puedes eliminar este mensaje.'
-            ], 403);
-        }
+        $esAutor = $mensaje->usuario_id === $request->user()->id;
+        $esAdmin = $mensaje->circulo->miembros()
+            ->where('usuario_id', $request->user()->id)
+            ->wherePivot('rol', 'admin')
+            ->exists();
+
+        abort_unless($esAutor || $esAdmin, 403, 'No tienes permiso para eliminar este mensaje');
 
         $mensaje->delete();
 
-        return response()->json([
-            'message' => 'Mensaje eliminado'
-        ]);
+        return response()->json(['message' => 'Mensaje eliminado']);
     }
 
-    public function reportar(MensajeChat $mensaje)
+    /**
+     * POST /mensajes/{mensaje}/reportar
+     */
+    public function reportar(ReportarMensajeRequest $request, MensajeChat $mensaje): JsonResponse
     {
-        $mensaje->update([
-            'reportado' => true,
-        ]);
+        $reporte = ReporteMensaje::firstOrCreate(
+            ['mensaje_id' => $mensaje->id, 'usuario_id' => $request->user()->id],
+            ['motivo' => $request->validated('motivo'), 'resuelto' => false]
+        );
 
-        return response()->json([
-            'message' => 'Mensaje reportado correctamente.',
-            'data' => $mensaje,
-        ]);
+        return response()->json(['data' => $reporte], 201);
     }
 }

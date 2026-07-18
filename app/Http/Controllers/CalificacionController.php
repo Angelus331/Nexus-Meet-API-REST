@@ -2,42 +2,34 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CalificacionCirculo;
+use App\Http\Requests\Calificacion\CrearCalificacionRequest;
 use App\Models\Circulo;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class CalificacionController extends Controller
 {
-    // GET /circulos/{circulo}/calificaciones
-    public function index(Request $request, Circulo $circulo)
+    /**
+     * GET /circulos/{circulo}/calificaciones
+     */
+    public function index(Circulo $circulo): JsonResponse
     {
-        $calificaciones = CalificacionCirculo::with('usuario')
-            ->where('circulo_id', $circulo->id)
-            ->orderByDesc('created_at')
-            ->paginate($request->get('per_page', 20));
-
-        return response()->json($calificaciones);
-    }
-
-    // POST /circulos/{circulo}/calificaciones
-    public function store(Request $request, Circulo $circulo)
-    {
-        $data = $request->validate([
-            'puntuacion' => 'required|integer|min:1|max:5',
-            'comentario' => 'nullable|string|max:500',
-        ]);
-
-        $calificacion = CalificacionCirculo::create([
-            'circulo_id' => $circulo->id,
-            'usuario_id' => $request->user()->id,
-            'puntuacion' => $data['puntuacion'],
-            'comentario' => $data['comentario'] ?? null,
-        ]);
-
         return response()->json([
-            'message' => 'Calificación registrada correctamente.',
-            'data' => $calificacion->load('usuario')
-        ], 201);
+            'data' => $circulo->calificaciones()->with('usuario')->latest('created_at')->get(),
+            'promedio' => $circulo->promedio_calificacion,
+        ]);
     }
 
+    /**
+     * POST /circulos/{circulo}/calificaciones
+     */
+    public function store(CrearCalificacionRequest $request, Circulo $circulo): JsonResponse
+    {
+        $calificacion = $circulo->calificaciones()->create([
+            'usuario_id' => $request->user()->id,
+            'puntuacion' => $request->validated('puntuacion'),
+            'comentario' => $request->validated('comentario'),
+        ]);
+
+        return response()->json(['data' => $calificacion], 201);
+    }
 }

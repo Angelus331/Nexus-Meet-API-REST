@@ -1,34 +1,32 @@
 <?php
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Http\Request;
+
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CalificacionController;
+use App\Http\Controllers\CirculoController;
+use App\Http\Controllers\EventoController;
+use App\Http\Controllers\GastoController;
+use App\Http\Controllers\MaterialController;
+use App\Http\Controllers\MensajeController;
+use App\Http\Controllers\MiembroController;
+use App\Http\Controllers\NotificacionController;
+use App\Http\Controllers\UsuarioController;
 use Illuminate\Support\Facades\Route;
 
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\UsuarioController;
-use App\Http\Controllers\CirculoController;
-use App\Http\Controllers\MiembroController;
-use App\Http\Controllers\MensajeController;
-use App\Http\Controllers\EventoController;
-use App\Http\Controllers\MaterialController;
-use App\Http\Controllers\GastoController;
-use App\Http\Controllers\CalificacionController;
-use App\Http\Controllers\NotificacionController;
-use App\Http\Controllers\AdminController;
-
-
+// ---------- Autenticación (públicas) ----------
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/google', [AuthController::class, 'loginGoogle']);
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
+// ---------- Todo lo demás requiere JWT ----------
 Route::middleware('auth:api')->group(function () {
+
+    // Auth
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-    Route::post('/auth/refresh', [AuthController::class, 'refresh']);	
-});
-
-Route::middleware('auth:api')->group(function () {
+    Route::post('/auth/refresh', [AuthController::class, 'refresh']);
 
     // Usuarios
     Route::get('/usuarios', [UsuarioController::class, 'index']);
@@ -88,7 +86,7 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/notificaciones/{notificacion}/leer', [NotificacionController::class, 'leer']);
     Route::put('/notificaciones/leer-todas', [NotificacionController::class, 'leerTodas']);
 
-    // Admin (Rodolfo — panel web)
+    // Panel Admin
     Route::prefix('admin')->group(function () {
         Route::get('/metrics', [AdminController::class, 'metrics']);
         Route::get('/circulos', [AdminController::class, 'circulos']);

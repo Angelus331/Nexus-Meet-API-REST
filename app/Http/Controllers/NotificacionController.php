@@ -2,58 +2,44 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Notificacion\MarcarLeidaRequest;
 use App\Models\Notificacion;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class NotificacionController extends Controller
 {
     /**
      * GET /notificaciones
      */
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $notificaciones = Notificacion::with('circulo')
-            ->where('usuario_id', $request->user()->id)
-            ->orderByDesc('created_at')
-            ->paginate($request->get('per_page', 20));
+        $query = $request->user()->notificaciones()->latest('created_at');
 
-        return response()->json($notificaciones);
+        if ($request->filled('leida')) {
+            $query->where('leida', filter_var($request->leida, FILTER_VALIDATE_BOOLEAN));
+        }
+
+        return response()->json($query->paginate($request->get('per_page', 20)));
     }
 
     /**
      * PUT /notificaciones/{notificacion}/leer
      */
-    public function leer(Request $request, Notificacion $notificacion)
+    public function leer(MarcarLeidaRequest $request, Notificacion $notificacion): JsonResponse
     {
-        if ($notificacion->usuario_id != $request->user()->id) {
-            return response()->json([
-                'message' => 'No tienes permiso para acceder a esta notificación.'
-            ], 403);
-        }
+        $notificacion->update(['leida' => true]);
 
-        $notificacion->update([
-            'leida' => true,
-        ]);
-
-        return response()->json([
-            'message' => 'Notificación marcada como leída.',
-            'data' => $notificacion
-        ]);
+        return response()->json(['data' => $notificacion]);
     }
 
     /**
      * PUT /notificaciones/leer-todas
      */
-    public function leerTodas(Request $request)
+    public function leerTodas(Request $request): JsonResponse
     {
-        Notificacion::where('usuario_id', $request->user()->id)
-            ->where('leida', false)
-            ->update([
-                'leida' => true,
-            ]);
+        $request->user()->notificaciones()->where('leida', false)->update(['leida' => true]);
 
-        return response()->json([
-            'message' => 'Todas las notificaciones fueron marcadas como leídas.'
-        ]);
+        return response()->json(['message' => 'Todas las notificaciones fueron marcadas como leídas']);
     }
 }

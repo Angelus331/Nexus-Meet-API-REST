@@ -2,71 +2,59 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MaterialCompartido;
+use App\Http\Requests\Material\SubirMaterialRequest;
 use App\Models\Circulo;
+use App\Models\MaterialCompartido;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Storage;
 
 class MaterialController extends Controller
 {
-    // GET /circulos/{circulo}/materiales
-    public function index(Request $request, Circulo $circulo)
+    /**
+     * GET /circulos/{circulo}/materiales
+     */
+    public function index(Circulo $circulo): JsonResponse
     {
-        $query = MaterialCompartido::with(['usuario', 'circulo'])
-            ->where('circulo_id', $circulo->id);
-
-        if ($request->filled('usuario_id')) {
-            $query->where('usuario_id', $request->usuario_id);
-        }
-
-        if ($request->filled('tipo_archivo')) {
-            $query->where('tipo_archivo', $request->tipo_archivo);
-        }
-
-        if ($request->filled('q')) {
-            $query->where('nombre_archivo', 'like', "%{$request->q}%");
-        }
-
-        return response()->json(
-            $query->orderByDesc('created_at')
-                  ->paginate($request->get('per_page', 20))
-        );
+        return response()->json([
+            'data' => $circulo->materiales()->with('usuario')->latest('created_at')->get(),
+        ]);
     }
 
-    // POST /circulos/{circulo}/materiales
-    public function store(Request $request, Circulo $circulo)
+    /**
+     * POST /circulos/{circulo}/materiales
+     */
+    public function store(SubirMaterialRequest $request, Circulo $circulo): JsonResponse
     {
-        $data = $request->validate([
-            //quite el circulo_id
-            'nombre_archivo' => 'required|string|max:255',
-            'url_archivo' => 'required|string|max:500',
-            'tipo_archivo' => 'required|string|max:50',
-            'tamano_bytes' => 'required|integer|min:0',
+        $archivo = $request->file('archivo');
+        $ruta = $archivo->store('materiales/circulo_' . $circulo->id, 'public');
+
+        $material = $circulo->materiales()->create([
+            'usuario_id' => $request->user()->id,
+            'nombre_archivo' => $archivo->getClientOriginalName(),
+            'url_archivo' => Storage::disk('public')->url($ruta),
+            'tipo_archivo' => $archivo->getClientOriginalExtension(),
+            'tamano_bytes' => $archivo->getSize(),
         ]);
 
-        $data['circulo_id'] = $circulo->id;
-        $data['usuario_id'] = $request->user()->id;
-
-        $material = MaterialCompartido::create($data);
-
-        return response()->json([
-            'message' => 'Material compartido correctamente.',
-            'data' => $material
-        ], 201);
+        return response()->json(['data' => $material], 201);
     }
 
-    // DELETE /materiales/{material}
-    public function destroy(Request $request, MaterialCompartido $material)
+    /**
+     * DELETE /materiales/{material}
+     */
+    public function destroy(Request $request, MaterialCompartido $material): JsonResponse
     {
-        if ($material->usuario_id != $request->user()->id) {
-            return response()->json([
-                'message' => 'No tienes permiso para eliminar este material.'
-            ], 403);
-        }
+        $esAutor = $material->usuario_id === $request->user()->id;
+        $esAdmin = $material->circulo->miembros()
+            ->where('usuario_id', $request->user()->id)
+            ->wherePivot('rol', 'admin')
+            ->exists();
+
+        abort_unless($esAutor || $esAdmin, 403, 'No tienes permiso para eliminar este material');
 
         $material->delete();
 
-        return response()->json([
-            'message' => 'Material eliminado correctamente.'
-        ]);
+        return response()->json(['message' => 'Material eliminado']);
     }
 }

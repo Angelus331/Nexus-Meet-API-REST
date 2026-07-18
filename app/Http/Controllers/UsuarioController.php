@@ -1,112 +1,113 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Models;
 
-use App\Models\Usuario;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Tymon\JWTAuth\Contracts\JWTSubject;
 
-
-class UsuarioController extends Controller
+class Usuario extends Authenticatable implements JWTSubject
 {
-   public function index(Request $request)
+    protected $table = 'usuario';
+
+    protected $fillable = [
+        'nombre',
+        'apellido',
+        'correo',
+        'password_hash',
+        'google_id',
+        'foto_perfil_url',
+        'facultad',
+        'carrera',
+        'telefono',
+        'email_verificado_en',
+        'activo',
+        'es_admin_plataforma',
+    ];
+
+    protected $hidden = [
+        'password_hash',
+    ];
+
+    protected $casts = [
+        'email_verificado_en' => 'datetime',
+        'activo' => 'boolean',
+        'es_admin_plataforma' => 'boolean',
+    ];
+
+    // Laravel busca por defecto la columna "password"; aquí usamos "password_hash"
+    public function getAuthPassword()
     {
-        $query = Usuario::query();
-
-        if ($request->filled('q')) {
-            $query->where(function ($q) use ($request) {
-                $q->where('nombre', 'like', "%{$request->q}%")
-                  ->orWhere('apellido', 'like', "%{$request->q}%")
-                  ->orWhere('correo', 'like', "%{$request->q}%");
-            });
-        }
-
-        if ($request->filled('activo')) {
-            $query->where('activo', $request->activo);
-        }
-
-        return response()->json(
-            $query->paginate($request->get('per_page', 20))
-        );
+        return $this->password_hash;
     }
 
-    // POST /usuarios
-    public function store(Request $request)
+    // ---------- JWTSubject ----------
+    public function getJWTIdentifier()
     {
-        $data = $request->validate([
-            'nombre' => 'required|string|max:100',
-            'apellido' => 'required|string|max:100',
-            'correo' => 'required|email|unique:usuario,correo',
-            'password' => 'required|string|min:8',
-            'facultad' => 'nullable|string|max:100',
-            'carrera' => 'nullable|string|max:100',
-            'telefono' => 'nullable|string|max:20',
-            'foto_perfil_url' => 'nullable|string',
-        ]);
-
-        $usuario = Usuario::create([
-            'nombre' => $data['nombre'],
-            'apellido' => $data['apellido'],
-            'correo' => $data['correo'],
-            'password_hash' => Hash::make($data['password']),
-            'facultad' => $data['facultad'] ?? null,
-            'carrera' => $data['carrera'] ?? null,
-            'telefono' => $data['telefono'] ?? null,
-            'foto_perfil_url' => $data['foto_perfil_url'] ?? null,
-            'activo' => true,
-        ]);
-
-        return response()->json([
-            'message' => 'Usuario creado correctamente',
-            'data' => $usuario
-        ], 201);
+        return $this->getKey();
     }
 
-    // GET /usuarios/{id}
-    public function show(Usuario $usuario)
+    public function getJWTCustomClaims()
     {
-        return response()->json([
-            'data' => $usuario->load('circulos', 'circulosCreados')
-        ]);
+        return [];
     }
 
-    // PUT /usuarios/{id}
-    public function update(Request $request, Usuario $usuario)
+    // ---------- Relaciones ----------
+
+    /** Círculos a los que pertenece (vía tabla pivote miembro_circulo) */
+    public function circulos(): BelongsToMany
     {
-        $data = $request->validate([
-            'nombre' => 'sometimes|string|max:100',
-            'apellido' => 'sometimes|string|max:100',
-            'correo' => 'sometimes|email|unique:usuario,correo,' . $usuario->id,
-            'password' => 'nullable|string|min:8',
-            'facultad' => 'nullable|string|max:100',
-            'carrera' => 'nullable|string|max:100',
-            'telefono' => 'nullable|string|max:20',
-            'foto_perfil_url' => 'nullable|string',
-            'activo' => 'boolean',
-        ]);
-
-        if (isset($data['password'])) {
-            $data['password_hash'] = Hash::make($data['password']);
-            unset($data['password']);
-        }
-
-        $usuario->update($data);
-
-        return response()->json([
-            'message' => 'Usuario actualizado',
-            'data' => $usuario
-        ]);
+        return $this->belongsToMany(Circulo::class, 'miembro_circulo', 'usuario_id', 'circulo_id')
+            ->withPivot('rol', 'estado', 'fecha_union')
+            ->using(MiembroCirculo::class);
     }
 
-    // DELETE /usuarios/{id}
-    public function destroy(Usuario $usuario)
+    /** Círculos que este usuario creó */
+    public function circulosCreados(): HasMany
     {
-        $usuario->update([
-            'activo' => false
-        ]);
+        return $this->hasMany(Circulo::class, 'creador_id');
+    }
 
-        return response()->json([
-            'message' => 'Usuario desactivado'
-        ]);
+    /** Mensajes de chat que envió */
+    public function mensajes(): HasMany
+    {
+        return $this->hasMany(MensajeChat::class, 'usuario_id');
+    }
+
+    /** Eventos donde es responsable (turnos de comida) */
+    public function eventosResponsable(): HasMany
+    {
+        return $this->hasMany(Evento::class, 'responsable_id');
+    }
+
+    /** Materiales que subió */
+    public function materiales(): HasMany
+    {
+        return $this->hasMany(MaterialCompartido::class, 'usuario_id');
+    }
+
+    /** Gastos que pagó (registró) */
+    public function gastosPagados(): HasMany
+    {
+        return $this->hasMany(Gasto::class, 'usuario_pagador_id');
+    }
+
+    /** Su parte en cada gasto dividido */
+    public function gastoDetalles(): HasMany
+    {
+        return $this->hasMany(GastoDetalle::class, 'usuario_id');
+    }
+
+    /** Calificaciones que dejó en círculos */
+    public function calificaciones(): HasMany
+    {
+        return $this->hasMany(CalificacionCirculo::class, 'usuario_id');
+    }
+
+    /** Sus notificaciones */
+    public function notificaciones(): HasMany
+    {
+        return $this->hasMany(Notificacion::class, 'usuario_id');
     }
 }
